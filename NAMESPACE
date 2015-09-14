@@ -1,0 +1,3 @@
+useDynLib(HiveClient)
+exportPattern("^[[:alpha:]]+")
+importFrom(Rcpp, evalCpp)
