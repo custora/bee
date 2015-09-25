@@ -1,0 +1,4 @@
+PKG_CPPFLAGS += -std=gnu++11 -I../inst/include -I../inst/include/tcli_thrift -Wno-macro-redefined
+PKG_LIBS = -lthrift
+SOURCES = $(wildcard *.cpp */*.cpp)
+OBJECTS = $(SOURCES:.cpp=.o)
