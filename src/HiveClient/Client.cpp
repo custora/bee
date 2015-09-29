@@ -11,12 +11,12 @@ using namespace apache::thrift;
 using namespace apache::hive::service::cli::thrift;
 
 typedef struct {
-  unsigned char buffer[4];
+  unsigned char bytes[4];
 } Quad;
 
 static Quad big_endian(int i) {
   return Quad {
-    .buffer = {
+    .bytes = {
       static_cast<unsigned char>((i & 0xff000000) >> 24),
       static_cast<unsigned char>((i & 0x00ff0000) >> 16),
       static_cast<unsigned char>((i & 0x0000ff00) >>  8),
@@ -26,29 +26,81 @@ static Quad big_endian(int i) {
 }
 
 HiveClient::Client::Client(const std::string &hostname, int port, const std::string &user, const std::string &pass) :
-  user(user),
-  pass(pass),
-  socket(new transport::TSocket(hostname, port)),
-  transport(new transport::TFramedTransport(socket)),
-  protocol(new protocol::TBinaryProtocol(transport)),
-  client(new apache::hive::service::cli::thrift::TCLIServiceClient(protocol)),
-  session_handle(),
-  operation_handle() {
-    this->transport->open();
+  user_(user),
+  pass_(pass),
+  socket_(new transport::TSocket(hostname, port)),
+  transport_(new transport::TFramedTransport(socket_)),
+  protocol_(new protocol::TBinaryProtocol(transport_)),
+  client_(new apache::hive::service::cli::thrift::TCLIServiceClient(protocol_)),
+  session_handle_(),
+  operation_handle_() {
+    this->transport_->open();
     this->perform_sasl_handshake();
     this->open_session();
 }
 
+void HiveClient::Client::execute(const std::string &sql) {
+  TExecuteStatementReq request;
+  TExecuteStatementResp response;
+  request.sessionHandle = this->session_handle_;
+  request.statement = sql;
+
+  this->client_->ExecuteStatement(response, request);
+  this->operation_handle_ = response.operationHandle;
+}
+
+Rcpp::List HiveClient::Client::fetch(int num_rows) {
+  if (num_rows < 1) {
+    throw std::runtime_error("num_rows must be > 1");
+  }
+
+  TFetchResultsReq result_request;
+  TFetchResultsResp result_response;
+  TGetResultSetMetadataReq metadata_request;
+  TGetResultSetMetadataResp metadata_response;
+
+  result_request.operationHandle = this->operation_handle_;
+  result_request.orientation = TFetchOrientation::FETCH_NEXT;
+  result_request.maxRows = num_rows;
+  this->client_->FetchResults(result_response, result_request);
+
+  // TFetchResultsResp.hasMoreRows is currently broken, so just keep going until
+  // we fall short.
+  this->has_more_rows_ = result_response.results.rows.size() >= num_rows;
+
+  metadata_request.operationHandle = this->operation_handle_;
+  this->client_->GetResultSetMetadata(metadata_response, metadata_request);
+
+  return build_data_frame(metadata_response.schema, result_response.results);
+}
+
+bool HiveClient::Client::has_more_rows() const {
+  return this->has_more_rows_;
+}
+
+std::string HiveClient::Client::inspect() {
+  std::ostringstream out;
+  out << "HiveClient::Client[" <<
+    "hostname=" << this->socket_->getHost() <<
+    ", port=" << this->socket_->getPort() <<
+    ", user=" << this->user_ <<
+    ", pass=" << this->pass_ <<
+    (this->has_session_handle() ? ", in session" : "") <<
+    (this->has_operation_handle() ? ", in operation" : "") <<
+    "]";
+  return out.str();
+}
+
 void HiveClient::Client::write_frame(const std::string &bytes) {
   Quad length = big_endian(bytes.size());
-  this->socket->write(length.buffer, 4);
-  this->socket->write(reinterpret_cast<const unsigned char *>(bytes.c_str()), bytes.size());
+  this->socket_->write(length.bytes, 4);
+  this->socket_->write(reinterpret_cast<const unsigned char *>(bytes.c_str()), bytes.size());
 }
 
 boost::shared_ptr<std::string> HiveClient::Client::read_frame() {
   unsigned int length = 0;
   unsigned char length_buffer[5];
-  this->socket->read(length_buffer, 4);
+  this->socket_->read(length_buffer, 4);
   length_buffer[4] = '\0';
   for (int i = 0; i < 4; ++i) {
     length += static_cast<int>(length_buffer[1 + i]) << i;
@@ -58,7 +110,7 @@ boost::shared_ptr<std::string> HiveClient::Client::read_frame() {
     return boost::shared_ptr<std::string>(new std::string(""));
   } else {
     char message[length];
-    this->socket->read(reinterpret_cast<unsigned char *>(message), length);
+    this->socket_->read(reinterpret_cast<unsigned char *>(message), length);
     return boost::shared_ptr<std::string>(new std::string(message, length));
   }
 }
@@ -67,23 +119,23 @@ void HiveClient::Client::perform_sasl_handshake() {
   // START PLAIN
   {
     unsigned char code = 0x01;
-    this->socket->write(&code, 1);
+    this->socket_->write(&code, 1);
     this->write_frame("PLAIN");
   }
 
   // OK PLAIN user pass
   {
     unsigned char code = 0x02;
-    this->socket->write(&code, 1);
+    this->socket_->write(&code, 1);
     std::ostringstream frame("[PLAIN]\x00");
-    frame << user << '\0' << pass;
+    frame << user_ << '\0' << pass_;
     this->write_frame(frame.str());
   }
 
-  this->socket->flush();
+  this->socket_->flush();
 
   unsigned char status;
-  this->socket->read(&status, 1);
+  this->socket_->read(&status, 1);
 
   switch (status) {
   case 3: // bad
@@ -95,8 +147,11 @@ void HiveClient::Client::perform_sasl_handshake() {
       break;
 
   case 2: // ok
-    throw std::runtime_error("failed to complete challenge exchange");
-    break;
+    {
+      boost::shared_ptr<std::string> message(this->read_frame());
+      throw std::runtime_error(std::string("ERROR: auth failed: ") + *message);
+      break;
+    }
 
   default:
     throw std::runtime_error("unexpected response from sasl handshake");
@@ -108,56 +163,16 @@ void HiveClient::Client::open_session() {
   TOpenSessionResp response;
   request.client_protocol = TProtocolVersion::HIVE_CLI_SERVICE_PROTOCOL_V3;
 
-  client->OpenSession(response, request);
-  this->session_handle = response.sessionHandle;
-}
-
-std::string HiveClient::Client::inspect() {
-  std::ostringstream out;
-  out << "HiveClient::Client[" <<
-    "hostname=" << this->socket->getHost() <<
-    ", port=" << this->socket->getPort() <<
-    ", user=" << this->user <<
-    ", pass=" << this->pass <<
-    (this->has_session_handle() ? ", in session" : "") <<
-    (this->has_operation_handle() ? ", in operation" : "") <<
-    "]";
-  return out.str();
+  client_->OpenSession(response, request);
+  this->session_handle_ = response.sessionHandle;
 }
 
 bool HiveClient::Client::has_session_handle() const {
-  return !this->session_handle.sessionId.guid.empty();
+  return !this->session_handle_.sessionId.guid.empty();
 }
 
 bool HiveClient::Client::has_operation_handle() const {
-  return !this->operation_handle.operationId.guid.empty();
-}
-
-void HiveClient::Client::execute(const std::string &sql) {
-  TExecuteStatementReq request;
-  TExecuteStatementResp response;
-  request.sessionHandle = this->session_handle;
-  request.statement = sql;
-
-  this->client->ExecuteStatement(response, request);
-  this->operation_handle = response.operationHandle;
-}
-
-Rcpp::List HiveClient::Client::fetch(int num_rows) {
-  TFetchResultsReq result_request;
-  TFetchResultsResp result_response;
-  TGetResultSetMetadataReq metadata_request;
-  TGetResultSetMetadataResp metadata_response;
-
-  result_request.operationHandle = this->operation_handle;
-  result_request.orientation = TFetchOrientation::FETCH_NEXT;
-  result_request.maxRows = num_rows;
-  this->client->FetchResults(result_response, result_request);
-
-  metadata_request.operationHandle = this->operation_handle;
-  this->client->GetResultSetMetadata(metadata_response, metadata_request);
-
-  return build_data_frame(metadata_response.schema, result_response.results);
+  return !this->operation_handle_.operationId.guid.empty();
 }
 
 Rcpp::List HiveClient::Client::build_data_frame(const TTableSchema schema, const TRowSet &row_set) const {

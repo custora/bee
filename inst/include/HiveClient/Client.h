@@ -19,6 +19,7 @@ namespace HiveClient {
     Client(const std::string &hostname, int port, const std::string &user, const std::string &pass);
     void execute(const std::string &sql);
     Rcpp::List fetch(int num_rows);
+    bool has_more_rows() const;
     std::string inspect();
 
   private:
@@ -40,15 +41,16 @@ namespace HiveClient {
     bool has_session_handle() const;
     bool has_operation_handle() const;
 
-    std::string user;
-    std::string pass;
-    boost::shared_ptr<transport::TSocket> socket;
-    boost::shared_ptr<transport::TFramedTransport> transport;
-    boost::shared_ptr<protocol::TProtocol> protocol;
-    boost::shared_ptr<TCLIServiceClient> client;
+    std::string user_;
+    std::string pass_;
+    bool has_more_rows_;
+    boost::shared_ptr<transport::TSocket> socket_;
+    boost::shared_ptr<transport::TFramedTransport> transport_;
+    boost::shared_ptr<protocol::TProtocol> protocol_;
+    boost::shared_ptr<TCLIServiceClient> client_;
 
-    TSessionHandle session_handle;
-    TOperationHandle operation_handle;
+    TSessionHandle session_handle_;
+    TOperationHandle operation_handle_;
   };
 }
 
