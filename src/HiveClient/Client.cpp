@@ -10,6 +10,21 @@
 using namespace apache::thrift;
 using namespace apache::hive::service::cli::thrift;
 
+typedef struct {
+  unsigned char buffer[4];
+} Quad;
+
+static Quad big_endian(int i) {
+  return Quad {
+    .buffer = {
+      static_cast<unsigned char>((i & 0xff000000) >> 24),
+      static_cast<unsigned char>((i & 0x00ff0000) >> 16),
+      static_cast<unsigned char>((i & 0x0000ff00) >>  8),
+      static_cast<unsigned char>((i & 0x000000ff) >>  0)
+    }
+  };
+}
+
 HiveClient::Client::Client(const std::string &hostname, int port, const std::string &user, const std::string &pass) :
   user(user),
   pass(pass),
@@ -24,42 +39,66 @@ HiveClient::Client::Client(const std::string &hostname, int port, const std::str
     this->open_session();
 }
 
+void HiveClient::Client::write_frame(const std::string &bytes) {
+  Quad length = big_endian(bytes.size());
+  this->socket->write(length.buffer, 4);
+  this->socket->write(reinterpret_cast<const unsigned char *>(bytes.c_str()), bytes.size());
+}
+
+boost::shared_ptr<std::string> HiveClient::Client::read_frame() {
+  unsigned int length = 0;
+  unsigned char length_buffer[5];
+  this->socket->read(length_buffer, 4);
+  length_buffer[4] = '\0';
+  for (int i = 0; i < 4; ++i) {
+    length += static_cast<int>(length_buffer[1 + i]) << i;
+  }
+
+  if (length == 0) {
+    return boost::shared_ptr<std::string>(new std::string(""));
+  } else {
+    char message[length];
+    this->socket->read(reinterpret_cast<unsigned char *>(message), length);
+    return boost::shared_ptr<std::string>(new std::string(message, length));
+  }
+}
+
 void HiveClient::Client::perform_sasl_handshake() {
-  this->socket->write(reinterpret_cast<const unsigned char *>("\x01\x00\x00\x00\x05" "PLAIN"), 10);  // START PLAIN
-  this->socket->write(reinterpret_cast<const unsigned char *>("\x02\x00\x00\x00\x1b" "[PLAIN]" "\x00" "anonymous" "\x00" "anonymous"), 32);  // OK PLAIN user pass
+  // START PLAIN
+  {
+    unsigned char code = 0x01;
+    this->socket->write(&code, 1);
+    this->write_frame("PLAIN");
+  }
+
+  // OK PLAIN user pass
+  {
+    unsigned char code = 0x02;
+    this->socket->write(&code, 1);
+    std::ostringstream frame("[PLAIN]\x00");
+    frame << user << '\0' << pass;
+    this->write_frame(frame.str());
+  }
+
   this->socket->flush();
 
-  unsigned char buffer[6];
-  int message_length = 0;
-  this->socket->read(buffer, 5);
-  buffer[5] = '\0';
-  switch (buffer[0]) {
-    case 3: // bad
-    case 4: { // error
-      for (int i = 0; i < 4; ++i)
-      message_length += static_cast<int>(buffer[1 + i]) << i;
-      char message[message_length + 1];
-      this->socket->read(reinterpret_cast<unsigned char *>(message), message_length);
-      message[message_length] = '\0';
-      throw std::runtime_error(message);
-      break;
-    }
+  unsigned char status;
+  this->socket->read(&status, 1);
 
-    case 5: { // complete
-      for (int i = 0; i < 4; ++i)
-      message_length += static_cast<int>(buffer[1 + i]) << i;
-      char message[message_length + 1];
-      this->socket->read(reinterpret_cast<unsigned char *>(message), message_length);
-      // message[message_length] = '\0';
-      // challenge = message;
-      break;
-    }
+  switch (status) {
+  case 3: // bad
+  case 4: // error
+      throw std::runtime_error(*this->read_frame());
 
-    case 2: // ok
+  case 5: // complete
+      this->read_frame();  // challenge -- ignored
+      break;
+
+  case 2: // ok
     throw std::runtime_error("failed to complete challenge exchange");
     break;
 
-    default:
+  default:
     throw std::runtime_error("unexpected response from sasl handshake");
   }
 }

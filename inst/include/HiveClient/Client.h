@@ -22,6 +22,8 @@ namespace HiveClient {
     std::string inspect();
 
   private:
+    void write_frame(const std::string &bytes);
+    boost::shared_ptr<std::string> read_frame();
     void perform_sasl_handshake();
     void open_session();
     Rcpp::List build_data_frame(const TTableSchema schema, const TRowSet &row_set) const;
