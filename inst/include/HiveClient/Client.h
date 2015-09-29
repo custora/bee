@@ -24,6 +24,17 @@ namespace HiveClient {
   private:
     void perform_sasl_handshake();
     void open_session();
+    Rcpp::List build_data_frame(const TTableSchema schema, const TRowSet &row_set) const;
+    Rcpp::LogicalVector build_logical_column_from_bool_value(const TRowSet &row_set, unsigned int column_index) const;
+    Rcpp::IntegerVector build_int_column_from_byte_value(const TRowSet &row_set, unsigned int column_index) const;
+    Rcpp::IntegerVector build_int_column_from_i16_value(const TRowSet &row_set, unsigned int column_index) const;
+    Rcpp::IntegerVector build_int_column_from_i32_value(const TRowSet &row_set, unsigned int column_index) const;
+    Rcpp::IntegerVector build_int_column_from_i64_value(const TRowSet &row_set, unsigned int column_index) const;
+    Rcpp::StringVector build_string_column_from_string_value(const TRowSet &row_set, unsigned int column_index) const;
+    Rcpp::DoubleVector build_double_column_from_double_value(const TRowSet &row_set, unsigned int column_index) const;
+    Rcpp::DoubleVector build_double_column_from_string_value(const TRowSet &row_set, unsigned int column_index) const;
+    Rcpp::IntegerVector build_null_column_from_null_value(const TRowSet &row_set) const;
+    Rcpp::StringVector build_error_column(const TRowSet &row_set, const char *error) const;
     bool has_session_handle() const;
     bool has_operation_handle() const;
 

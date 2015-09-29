@@ -1,5 +1,10 @@
+#include <stdlib.h>
 #include <exception>
 #include <sstream>
+
+#include <boost/format.hpp>
+#include "Rinternals.h"
+
 #include "HiveClient/Client.h"
 
 using namespace apache::thrift;
@@ -100,18 +105,185 @@ void HiveClient::Client::execute(const std::string &sql) {
 }
 
 Rcpp::List HiveClient::Client::fetch(int num_rows) {
-  TFetchResultsReq request;
-  TFetchResultsResp response;
-  request.operationHandle = this->operation_handle;
-  request.orientation = TFetchOrientation::FETCH_NEXT;
-  request.maxRows = num_rows;
+  TFetchResultsReq result_request;
+  TFetchResultsResp result_response;
+  TGetResultSetMetadataReq metadata_request;
+  TGetResultSetMetadataResp metadata_response;
 
-  this->client->FetchResults(response, request);
+  result_request.operationHandle = this->operation_handle;
+  result_request.orientation = TFetchOrientation::FETCH_NEXT;
+  result_request.maxRows = num_rows;
+  this->client->FetchResults(result_response, result_request);
 
-  Rcpp::List result(1);
-  result.attr("names") = Rcpp::StringVector::create("result");
+  metadata_request.operationHandle = this->operation_handle;
+  this->client->GetResultSetMetadata(metadata_response, metadata_request);
+
+  return build_data_frame(metadata_response.schema, result_response.results);
+}
+
+Rcpp::List HiveClient::Client::build_data_frame(const TTableSchema schema, const TRowSet &row_set) const {
+  const unsigned int num_columns = schema.columns.size();
+  const unsigned int num_rows = row_set.rows.size();
+
+  Rcpp::List result(num_columns);
   result.attr("class") = "data.frame";
-  result.attr("row.names") = Rcpp::IntegerVector::create(NA_INTEGER, -1);
-  result[0] = Rcpp::IntegerVector::create(response.results.rows[0].colVals[0].i32Val.value);
+  result.attr("row.names") = Rcpp::IntegerVector::create(NA_INTEGER, -num_rows);
+
+  Rcpp::StringVector names(num_columns, NA_STRING);
+  for (unsigned int c = 0; c < num_columns; ++c) {
+    names[c] = schema.columns[c].columnName;
+  }
+  result.attr("names") = names;
+
+  for (unsigned int c = 0; c < num_columns; ++c) {
+    if (schema.columns[c].typeDesc.types.size() < 1) {
+      throw std::runtime_error("BUG: empty type");
+    }
+
+    if (!schema.columns[c].typeDesc.types[0].__isset.primitiveEntry) {
+      throw std::runtime_error("ERROR: only primitive types currently supported");
+    }
+
+    switch (schema.columns[c].typeDesc.types[0].primitiveEntry.type) {
+    case TTypeId::BOOLEAN_TYPE:
+      result[c] = build_logical_column_from_bool_value(row_set, c);
+      break;
+
+    case TTypeId::TINYINT_TYPE:
+      result[c] = build_int_column_from_byte_value(row_set, c);
+      break;
+
+    case TTypeId::SMALLINT_TYPE:
+      result[c] = build_int_column_from_i16_value(row_set, c);
+      break;
+
+    case TTypeId::INT_TYPE:
+      result[c] = build_int_column_from_i32_value(row_set, c);
+      break;
+
+    case TTypeId::BIGINT_TYPE:
+      result[c] = build_int_column_from_i64_value(row_set, c);
+      break;
+
+    case TTypeId::FLOAT_TYPE:
+    case TTypeId::DOUBLE_TYPE:
+      result[c] = build_double_column_from_double_value(row_set, c);
+      break;
+
+    case TTypeId::STRING_TYPE:
+    case TTypeId::VARCHAR_TYPE:
+    case TTypeId::CHAR_TYPE:
+    case TTypeId::BINARY_TYPE:
+    case TTypeId::TIMESTAMP_TYPE:
+    case TTypeId::DATE_TYPE:
+      result[c] = build_string_column_from_string_value(row_set, c);
+      break;
+
+    case TTypeId::DECIMAL_TYPE:
+      result[c] = build_double_column_from_string_value(row_set, c);
+      break;
+
+    case TTypeId::NULL_TYPE:  // for "select null"
+      result[c] = build_null_column_from_null_value(row_set);
+      break;
+
+    case TTypeId::ARRAY_TYPE:
+    case TTypeId::MAP_TYPE:
+    case TTypeId::STRUCT_TYPE:
+    case TTypeId::UNION_TYPE:
+    case TTypeId::USER_DEFINED_TYPE:
+    default:
+      TTypeId::type type_id = schema.columns[c].typeDesc.types[0].primitiveEntry.type;
+      boost::format format("ERROR: unsupported column type id: %1%");
+      throw std::runtime_error(boost::str(format % type_id));
+      build_error_column(row_set, "unsupported column type");
+    }
+  }
+
+  return result;
+}
+
+Rcpp::LogicalVector HiveClient::Client::build_logical_column_from_bool_value(const TRowSet &row_set, unsigned int column_index) const {
+  unsigned int num_rows = row_set.rows.size();
+  Rcpp::LogicalVector result(num_rows, NA_LOGICAL);
+  for (unsigned int i = 0; i < num_rows; ++i) {
+    result[i] = row_set.rows[i].colVals[column_index].boolVal.value;
+  }
+  return result;
+}
+
+Rcpp::IntegerVector HiveClient::Client::build_int_column_from_byte_value(const TRowSet &row_set, unsigned int column_index) const {
+  unsigned int num_rows = row_set.rows.size();
+  Rcpp::IntegerVector result(num_rows, NA_INTEGER);
+  for (unsigned int i = 0; i < num_rows; ++i) {
+    result[i] = row_set.rows[i].colVals[column_index].byteVal.value;
+  }
+  return result;
+}
+
+Rcpp::IntegerVector HiveClient::Client::build_int_column_from_i16_value(const TRowSet &row_set, unsigned int column_index) const {
+  unsigned int num_rows = row_set.rows.size();
+  Rcpp::IntegerVector result(num_rows, NA_INTEGER);
+  for (unsigned int i = 0; i < num_rows; ++i) {
+    result[i] = row_set.rows[i].colVals[column_index].i16Val.value;
+  }
+  return result;
+}
+
+Rcpp::IntegerVector HiveClient::Client::build_int_column_from_i32_value(const TRowSet &row_set, unsigned int column_index) const {
+  unsigned int num_rows = row_set.rows.size();
+  Rcpp::IntegerVector result(num_rows, NA_INTEGER);
+  for (unsigned int i = 0; i < num_rows; ++i) {
+    result[i] = row_set.rows[i].colVals[column_index].i32Val.value;
+  }
+  return result;
+}
+
+Rcpp::IntegerVector HiveClient::Client::build_int_column_from_i64_value(const TRowSet &row_set, unsigned int column_index) const {
+  unsigned int num_rows = row_set.rows.size();
+  Rcpp::IntegerVector result(num_rows, NA_INTEGER);
+  for (unsigned int i = 0; i < num_rows; ++i) {
+    result[i] = row_set.rows[i].colVals[column_index].i64Val.value;
+  }
+  return result;
+}
+
+Rcpp::StringVector HiveClient::Client::build_string_column_from_string_value(const TRowSet &row_set, unsigned int column_index) const {
+  unsigned int num_rows = row_set.rows.size();
+  Rcpp::StringVector result(num_rows, NA_STRING);
+  for (unsigned int i = 0; i < num_rows; ++i) {
+    result[i] = row_set.rows[i].colVals[column_index].stringVal.value;
+  }
+  return result;
+}
+
+Rcpp::DoubleVector HiveClient::Client::build_double_column_from_double_value(const TRowSet &row_set, unsigned int column_index) const {
+  unsigned int num_rows = row_set.rows.size();
+  Rcpp::DoubleVector result(num_rows, NA_REAL);
+  for (unsigned int i = 0; i < num_rows; ++i) {
+    result[i] = row_set.rows[i].colVals[column_index].doubleVal.value;
+  }
+  return result;
+}
+
+Rcpp::DoubleVector HiveClient::Client::build_double_column_from_string_value(const TRowSet &row_set, unsigned int column_index) const {
+  unsigned int num_rows = row_set.rows.size();
+  Rcpp::DoubleVector result(num_rows, NA_REAL);
+  for (unsigned int i = 0; i < num_rows; ++i) {
+    result[i] = atof(row_set.rows[i].colVals[column_index].stringVal.value.c_str());
+  }
+  return result;
+}
+
+Rcpp::IntegerVector HiveClient::Client::build_null_column_from_null_value(const TRowSet &row_set) const {
+  return Rcpp::IntegerVector(row_set.rows.size(), NA_INTEGER);
+}
+
+Rcpp::StringVector HiveClient::Client::build_error_column(const TRowSet &row_set, const char *error) const {
+  unsigned int num_rows = row_set.rows.size();
+  Rcpp::StringVector result(num_rows, NA_STRING);
+  for (unsigned int i = 0; i < num_rows; ++i) {
+    result[i] = error;
+  }
   return result;
 }
