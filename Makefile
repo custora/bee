@@ -1,12 +1,12 @@
 R = R
 HIVE_SRC = ~/src/hive
-RCPP_GEN_SRC = R/RcppExports.R inst/include/HiveClient_RcppExports.h src/RcppExports.cpp
+RCPP_GEN_SRC = R/RcppExports.R inst/include/bee_RcppExports.h src/RcppExports.cpp
 
 package: $(RCPP_GEN_SRC)
 	R CMD BUILD .
 
 install: package
-	R CMD INSTALL HiveClient_1.0.tar.gz
+	R CMD INSTALL bee_1.0.tar.gz
 
 clean:
 	rm -f $(RCPP_GEN_SRC)

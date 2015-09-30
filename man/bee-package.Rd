@@ -1,25 +1,25 @@
-\name{HiveClient-package}
-\alias{HiveClient-package}
-\alias{HiveClient}
+\name{bee-package}
+\alias{bee-package}
+\alias{bee}
 \docType{package}
 \title{
-\packageTitle{HiveClient}
+\packageTitle{bee}
 }
 \description{
-\packageDescription{HiveClient}
+\packageDescription{bee}
 }
 \details{
 
 The DESCRIPTION file:
-\packageDESCRIPTION{HiveClient}
-\packageIndices{HiveClient}
+\packageDESCRIPTION{bee}
+\packageIndices{bee}
 ~~ An overview of how to use the package, including the most important ~~
 ~~ functions ~~
 }
 \author{
-\packageAuthor{HiveClient}
+\packageAuthor{bee}
 
-Maintainer: \packageMaintainer{HiveClient}
+Maintainer: \packageMaintainer{bee}
 }
 \references{
 ~~ Literature or other references for background information ~~

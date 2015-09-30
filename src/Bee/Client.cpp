@@ -5,7 +5,7 @@
 #include <boost/format.hpp>
 #include "Rinternals.h"
 
-#include "HiveClient/Client.h"
+#include "Bee/Client.h"
 
 using namespace apache::thrift;
 using namespace apache::hive::service::cli::thrift;
@@ -25,7 +25,7 @@ static Quad big_endian(int i) {
   };
 }
 
-HiveClient::Client::Client(const std::string &hostname, int port, const std::string &user, const std::string &pass) :
+Bee::Client::Client(const std::string &hostname, int port, const std::string &user, const std::string &pass) :
   user_(user),
   pass_(pass),
   socket_(new transport::TSocket(hostname, port)),
@@ -39,7 +39,7 @@ HiveClient::Client::Client(const std::string &hostname, int port, const std::str
     this->open_session();
 }
 
-void HiveClient::Client::execute(const std::string &sql) {
+void Bee::Client::execute(const std::string &sql) {
   TExecuteStatementReq request;
   TExecuteStatementResp response;
   request.sessionHandle = this->session_handle_;
@@ -49,7 +49,7 @@ void HiveClient::Client::execute(const std::string &sql) {
   this->operation_handle_ = response.operationHandle;
 }
 
-Rcpp::List HiveClient::Client::fetch(int num_rows) {
+Rcpp::List Bee::Client::fetch(int num_rows) {
   if (num_rows < 1) {
     throw std::runtime_error("num_rows must be > 1");
   }
@@ -74,13 +74,13 @@ Rcpp::List HiveClient::Client::fetch(int num_rows) {
   return build_data_frame(metadata_response.schema, result_response.results);
 }
 
-bool HiveClient::Client::has_more_rows() const {
+bool Bee::Client::has_more_rows() const {
   return this->has_more_rows_;
 }
 
-std::string HiveClient::Client::inspect() {
+std::string Bee::Client::inspect() {
   std::ostringstream out;
-  out << "HiveClient::Client[" <<
+  out << "Bee::Client[" <<
     "hostname=" << this->socket_->getHost() <<
     ", port=" << this->socket_->getPort() <<
     ", user=" << this->user_ <<
@@ -91,13 +91,13 @@ std::string HiveClient::Client::inspect() {
   return out.str();
 }
 
-void HiveClient::Client::write_frame(const std::string &bytes) {
+void Bee::Client::write_frame(const std::string &bytes) {
   Quad length = big_endian(bytes.size());
   this->socket_->write(length.bytes, 4);
   this->socket_->write(reinterpret_cast<const unsigned char *>(bytes.c_str()), bytes.size());
 }
 
-boost::shared_ptr<std::string> HiveClient::Client::read_frame() {
+boost::shared_ptr<std::string> Bee::Client::read_frame() {
   unsigned int length = 0;
   unsigned char length_buffer[5];
   this->socket_->read(length_buffer, 4);
@@ -115,7 +115,7 @@ boost::shared_ptr<std::string> HiveClient::Client::read_frame() {
   }
 }
 
-void HiveClient::Client::perform_sasl_handshake() {
+void Bee::Client::perform_sasl_handshake() {
   // START PLAIN
   {
     unsigned char code = 0x01;
@@ -158,7 +158,7 @@ void HiveClient::Client::perform_sasl_handshake() {
   }
 }
 
-void HiveClient::Client::open_session() {
+void Bee::Client::open_session() {
   TOpenSessionReq request;
   TOpenSessionResp response;
   request.client_protocol = TProtocolVersion::HIVE_CLI_SERVICE_PROTOCOL_V3;
@@ -167,15 +167,15 @@ void HiveClient::Client::open_session() {
   this->session_handle_ = response.sessionHandle;
 }
 
-bool HiveClient::Client::has_session_handle() const {
+bool Bee::Client::has_session_handle() const {
   return !this->session_handle_.sessionId.guid.empty();
 }
 
-bool HiveClient::Client::has_operation_handle() const {
+bool Bee::Client::has_operation_handle() const {
   return !this->operation_handle_.operationId.guid.empty();
 }
 
-Rcpp::List HiveClient::Client::build_data_frame(const TTableSchema schema, const TRowSet &row_set) const {
+Rcpp::List Bee::Client::build_data_frame(const TTableSchema schema, const TRowSet &row_set) const {
   const unsigned int num_columns = schema.columns.size();
   const unsigned int num_rows = row_set.rows.size();
 
@@ -257,7 +257,7 @@ Rcpp::List HiveClient::Client::build_data_frame(const TTableSchema schema, const
   return result;
 }
 
-Rcpp::LogicalVector HiveClient::Client::build_logical_column_from_bool_value(const TRowSet &row_set, unsigned int column_index) const {
+Rcpp::LogicalVector Bee::Client::build_logical_column_from_bool_value(const TRowSet &row_set, unsigned int column_index) const {
   unsigned int num_rows = row_set.rows.size();
   Rcpp::LogicalVector result(num_rows, NA_LOGICAL);
   for (unsigned int i = 0; i < num_rows; ++i) {
@@ -266,7 +266,7 @@ Rcpp::LogicalVector HiveClient::Client::build_logical_column_from_bool_value(con
   return result;
 }
 
-Rcpp::IntegerVector HiveClient::Client::build_int_column_from_byte_value(const TRowSet &row_set, unsigned int column_index) const {
+Rcpp::IntegerVector Bee::Client::build_int_column_from_byte_value(const TRowSet &row_set, unsigned int column_index) const {
   unsigned int num_rows = row_set.rows.size();
   Rcpp::IntegerVector result(num_rows, NA_INTEGER);
   for (unsigned int i = 0; i < num_rows; ++i) {
@@ -275,7 +275,7 @@ Rcpp::IntegerVector HiveClient::Client::build_int_column_from_byte_value(const T
   return result;
 }
 
-Rcpp::IntegerVector HiveClient::Client::build_int_column_from_i16_value(const TRowSet &row_set, unsigned int column_index) const {
+Rcpp::IntegerVector Bee::Client::build_int_column_from_i16_value(const TRowSet &row_set, unsigned int column_index) const {
   unsigned int num_rows = row_set.rows.size();
   Rcpp::IntegerVector result(num_rows, NA_INTEGER);
   for (unsigned int i = 0; i < num_rows; ++i) {
@@ -284,7 +284,7 @@ Rcpp::IntegerVector HiveClient::Client::build_int_column_from_i16_value(const TR
   return result;
 }
 
-Rcpp::IntegerVector HiveClient::Client::build_int_column_from_i32_value(const TRowSet &row_set, unsigned int column_index) const {
+Rcpp::IntegerVector Bee::Client::build_int_column_from_i32_value(const TRowSet &row_set, unsigned int column_index) const {
   unsigned int num_rows = row_set.rows.size();
   Rcpp::IntegerVector result(num_rows, NA_INTEGER);
   for (unsigned int i = 0; i < num_rows; ++i) {
@@ -293,7 +293,7 @@ Rcpp::IntegerVector HiveClient::Client::build_int_column_from_i32_value(const TR
   return result;
 }
 
-Rcpp::IntegerVector HiveClient::Client::build_int_column_from_i64_value(const TRowSet &row_set, unsigned int column_index) const {
+Rcpp::IntegerVector Bee::Client::build_int_column_from_i64_value(const TRowSet &row_set, unsigned int column_index) const {
   unsigned int num_rows = row_set.rows.size();
   Rcpp::IntegerVector result(num_rows, NA_INTEGER);
   for (unsigned int i = 0; i < num_rows; ++i) {
@@ -302,7 +302,7 @@ Rcpp::IntegerVector HiveClient::Client::build_int_column_from_i64_value(const TR
   return result;
 }
 
-Rcpp::StringVector HiveClient::Client::build_string_column_from_string_value(const TRowSet &row_set, unsigned int column_index) const {
+Rcpp::StringVector Bee::Client::build_string_column_from_string_value(const TRowSet &row_set, unsigned int column_index) const {
   unsigned int num_rows = row_set.rows.size();
   Rcpp::StringVector result(num_rows, NA_STRING);
   for (unsigned int i = 0; i < num_rows; ++i) {
@@ -311,7 +311,7 @@ Rcpp::StringVector HiveClient::Client::build_string_column_from_string_value(con
   return result;
 }
 
-Rcpp::DoubleVector HiveClient::Client::build_double_column_from_double_value(const TRowSet &row_set, unsigned int column_index) const {
+Rcpp::DoubleVector Bee::Client::build_double_column_from_double_value(const TRowSet &row_set, unsigned int column_index) const {
   unsigned int num_rows = row_set.rows.size();
   Rcpp::DoubleVector result(num_rows, NA_REAL);
   for (unsigned int i = 0; i < num_rows; ++i) {
@@ -320,7 +320,7 @@ Rcpp::DoubleVector HiveClient::Client::build_double_column_from_double_value(con
   return result;
 }
 
-Rcpp::DoubleVector HiveClient::Client::build_double_column_from_string_value(const TRowSet &row_set, unsigned int column_index) const {
+Rcpp::DoubleVector Bee::Client::build_double_column_from_string_value(const TRowSet &row_set, unsigned int column_index) const {
   unsigned int num_rows = row_set.rows.size();
   Rcpp::DoubleVector result(num_rows, NA_REAL);
   for (unsigned int i = 0; i < num_rows; ++i) {
@@ -329,11 +329,11 @@ Rcpp::DoubleVector HiveClient::Client::build_double_column_from_string_value(con
   return result;
 }
 
-Rcpp::IntegerVector HiveClient::Client::build_null_column_from_null_value(const TRowSet &row_set) const {
+Rcpp::IntegerVector Bee::Client::build_null_column_from_null_value(const TRowSet &row_set) const {
   return Rcpp::IntegerVector(row_set.rows.size(), NA_INTEGER);
 }
 
-Rcpp::StringVector HiveClient::Client::build_error_column(const TRowSet &row_set, const char *error) const {
+Rcpp::StringVector Bee::Client::build_error_column(const TRowSet &row_set, const char *error) const {
   unsigned int num_rows = row_set.rows.size();
   Rcpp::StringVector result(num_rows, NA_STRING);
   for (unsigned int i = 0; i < num_rows; ++i) {

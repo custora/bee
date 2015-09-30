@@ -1,5 +1,5 @@
-#ifndef __HiveClient_Client_h__
-#define __HiveClient_Client_h__
+#ifndef __Bee_Client_h__
+#define __Bee_Client_h__
 
 #include <string>
 
@@ -10,7 +10,7 @@
 
 #include "tcli_thrift/TCLIService.h"
 
-namespace HiveClient {
+namespace Bee {
   using namespace apache::thrift;
   using namespace apache::hive::service::cli::thrift;
 
@@ -54,4 +54,4 @@ namespace HiveClient {
   };
 }
 
-#endif // __HiveClient_Client_h__
+#endif // __Bee_Client_h__
