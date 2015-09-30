@@ -4,7 +4,12 @@
 // [[Rcpp::interfaces(cpp, r)]]
 
 // [[Rcpp::export]]
-Rcpp::XPtr<Bee::Client> bee_connect(std::string hostname, int port, std::string user="anonymous", std::string pass="anonymous") {
+Rcpp::XPtr<Bee::Client> bee_connect(
+  std::string hostname="127.0.0.1",
+  int port=10000,
+  std::string user="anonymous",
+  std::string pass="anonymous"
+) {
   Rcpp::XPtr<Bee::Client> client(new Bee::Client(hostname, port, user, pass));
   client.attr("class") = "bee.client";
   return client;

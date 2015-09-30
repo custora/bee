@@ -18,6 +18,8 @@ From source:
     bee <- bee_connect('127.0.0.1', 10000)
     data_frame <- bee_run('select * from honey')
 
+The host and port default to `"127.0.0.1"` and `10000` respectively.
+
 ## Authentication
 
 Bee currently supports the PLAIN SASL authentication mechanism only. You may
