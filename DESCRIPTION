@@ -1,11 +1,13 @@
 Package: bee
 Type: Package
-Title: What the package does (short line)
+Title: Client for HiveServer 2 / Spark ThriftServer.
 Version: 1.0
+Depends: dplyr (>= 0.4.1)
 Date: 2015-09-14
-Author: Your Name
-Maintainer: Your Name <your@email.com>
-Description: More about what it does (maybe more than one line)
+Author: George Ogata
+Maintainer: George Ogata <george.ogata@gmail.com>
+Description: A simple client for HiveServer 2 and Spark ThriftServer, with
+    minimal dependencies.
 License: GPL (>= 2)
 Imports: Rcpp (>= 0.12.0)
 LinkingTo: Rcpp, BH
