@@ -3,7 +3,7 @@ HIVE_SRC = ~/src/hive
 RCPP_GEN_SRC = R/RcppExports.R inst/include/bee_RcppExports.h src/RcppExports.cpp
 
 package: $(RCPP_GEN_SRC)
-	R CMD BUILD .
+	R CMD build .
 
 install: package
 	R CMD INSTALL bee_1.0.tar.gz
