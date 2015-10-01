@@ -15,6 +15,12 @@ Rcpp::XPtr<Bee::Client> bee_connect(
   return client;
 }
 
+void bee_disconnect(SEXP client_sexp) {
+  Rcpp::XPtr<Bee::Client> client_xptr(client_sexp);
+  Bee::Client *client = client_xptr.get();
+  client->disconnect();
+}
+
 // [[Rcpp::export]]
 Rcpp::XPtr<Bee::Client> bee_execute(SEXP client_sexp, std::string sql) {
   Rcpp::XPtr<Bee::Client> client_xptr(client_sexp);

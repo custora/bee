@@ -17,6 +17,7 @@ namespace Bee {
   class Client {
   public:
     Client(const std::string &hostname, int port, const std::string &user, const std::string &pass);
+    void disconnect();
     void execute(const std::string &sql);
     Rcpp::List fetch(int num_rows);
     bool has_more_rows() const;
@@ -27,6 +28,7 @@ namespace Bee {
     boost::shared_ptr<std::string> read_frame();
     void perform_sasl_handshake();
     void open_session();
+    void ensure_connected() const;
     Rcpp::List build_data_frame(const TTableSchema schema, const TRowSet &row_set) const;
     Rcpp::LogicalVector build_logical_column_from_bool_value(const TRowSet &row_set, unsigned int column_index) const;
     Rcpp::IntegerVector build_int_column_from_byte_value(const TRowSet &row_set, unsigned int column_index) const;

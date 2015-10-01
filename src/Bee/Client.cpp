@@ -39,7 +39,15 @@ Bee::Client::Client(const std::string &hostname, int port, const std::string &us
     this->open_session();
 }
 
+void Bee::Client::disconnect() {
+  if (this->transport_->isOpen()) {
+    this->transport_->close();
+  }
+}
+
 void Bee::Client::execute(const std::string &sql) {
+  this->ensure_connected();
+
   TExecuteStatementReq request;
   TExecuteStatementResp response;
   request.sessionHandle = this->session_handle_;
@@ -50,6 +58,8 @@ void Bee::Client::execute(const std::string &sql) {
 }
 
 Rcpp::List Bee::Client::fetch(int num_rows) {
+  this->ensure_connected();
+
   if (num_rows < 1) {
     throw std::runtime_error("num_rows must be > 1");
   }
@@ -85,6 +95,7 @@ std::string Bee::Client::inspect() {
     ", port=" << this->socket_->getPort() <<
     ", user=" << this->user_ <<
     ", pass=" << this->pass_ <<
+    (this->transport_->isOpen() ? ", connected" : "") <<
     (this->has_session_handle() ? ", in session" : "") <<
     (this->has_operation_handle() ? ", in operation" : "") <<
     "]";
@@ -165,6 +176,11 @@ void Bee::Client::open_session() {
 
   client_->OpenSession(response, request);
   this->session_handle_ = response.sessionHandle;
+}
+
+void Bee::Client::ensure_connected() const {
+  if (!this->transport_->isOpen())
+    throw std::runtime_error("not connected");
 }
 
 bool Bee::Client::has_session_handle() const {
