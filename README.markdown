@@ -8,7 +8,13 @@ library, keeping client dependencies minimal, and processing fast.
 
 ## Installation
 
-From source:
+You will need:
+
+* Thrift >= 0.9.2 (including development headers)
+* The Rcpp r package
+* Make
+
+Then run:
 
     make install
 
