@@ -34,31 +34,31 @@ Bee::Client::Client(const std::string &hostname, int port, const std::string &us
   client_(new apache::hive::service::cli::thrift::TCLIServiceClient(protocol_)),
   session_handle_(),
   operation_handle_() {
-    this->transport_->open();
-    this->perform_sasl_handshake();
-    this->open_session();
+    transport_->open();
+    perform_sasl_handshake();
+    open_session();
 }
 
 void Bee::Client::disconnect() {
-  if (this->transport_->isOpen()) {
-    this->transport_->close();
+  if (transport_->isOpen()) {
+    transport_->close();
   }
 }
 
 void Bee::Client::execute(const std::string &sql) {
-  this->ensure_connected();
+  ensure_connected();
 
   TExecuteStatementReq request;
   TExecuteStatementResp response;
-  request.sessionHandle = this->session_handle_;
+  request.sessionHandle = session_handle_;
   request.statement = sql;
 
-  this->client_->ExecuteStatement(response, request);
-  this->operation_handle_ = response.operationHandle;
+  client_->ExecuteStatement(response, request);
+  operation_handle_ = response.operationHandle;
 }
 
 Rcpp::List Bee::Client::fetch(int num_rows) {
-  this->ensure_connected();
+  ensure_connected();
 
   if (num_rows < 1) {
     throw std::runtime_error("num_rows must be > 1");
@@ -69,49 +69,49 @@ Rcpp::List Bee::Client::fetch(int num_rows) {
   TGetResultSetMetadataReq metadata_request;
   TGetResultSetMetadataResp metadata_response;
 
-  result_request.operationHandle = this->operation_handle_;
+  result_request.operationHandle = operation_handle_;
   result_request.orientation = TFetchOrientation::FETCH_NEXT;
   result_request.maxRows = num_rows;
-  this->client_->FetchResults(result_response, result_request);
+  client_->FetchResults(result_response, result_request);
 
   // TFetchResultsResp.hasMoreRows is currently broken, so just keep going until
   // we fall short.
-  this->has_more_rows_ = result_response.results.rows.size() >= num_rows;
+  has_more_rows_ = result_response.results.rows.size() >= num_rows;
 
-  metadata_request.operationHandle = this->operation_handle_;
-  this->client_->GetResultSetMetadata(metadata_response, metadata_request);
+  metadata_request.operationHandle = operation_handle_;
+  client_->GetResultSetMetadata(metadata_response, metadata_request);
 
   return build_data_frame(metadata_response.schema, result_response.results);
 }
 
 bool Bee::Client::has_more_rows() const {
-  return this->has_more_rows_;
+  return has_more_rows_;
 }
 
 std::string Bee::Client::inspect() {
   std::ostringstream out;
   out << "Bee::Client[" <<
-    "hostname=" << this->socket_->getHost() <<
-    ", port=" << this->socket_->getPort() <<
-    ", user=" << this->user_ <<
-    ", pass=" << this->pass_ <<
-    (this->transport_->isOpen() ? ", connected" : "") <<
-    (this->has_session_handle() ? ", in session" : "") <<
-    (this->has_operation_handle() ? ", in operation" : "") <<
+    "hostname=" << socket_->getHost() <<
+    ", port=" << socket_->getPort() <<
+    ", user=" << user_ <<
+    ", pass=" << pass_ <<
+    (transport_->isOpen() ? ", connected" : "") <<
+    (has_session_handle() ? ", in session" : "") <<
+    (has_operation_handle() ? ", in operation" : "") <<
     "]";
   return out.str();
 }
 
 void Bee::Client::write_frame(const std::string &bytes) {
   Quad length = big_endian(bytes.size());
-  this->socket_->write(length.bytes, 4);
-  this->socket_->write(reinterpret_cast<const unsigned char *>(bytes.c_str()), bytes.size());
+  socket_->write(length.bytes, 4);
+  socket_->write(reinterpret_cast<const unsigned char *>(bytes.c_str()), bytes.size());
 }
 
 boost::shared_ptr<std::string> Bee::Client::read_frame() {
   unsigned int length = 0;
   unsigned char length_buffer[5];
-  this->socket_->read(length_buffer, 4);
+  socket_->read(length_buffer, 4);
   length_buffer[4] = '\0';
   for (int i = 0; i < 4; ++i) {
     length += static_cast<int>(length_buffer[1 + i]) << i;
@@ -121,7 +121,7 @@ boost::shared_ptr<std::string> Bee::Client::read_frame() {
     return boost::shared_ptr<std::string>(new std::string(""));
   } else {
     char message[length];
-    this->socket_->read(reinterpret_cast<unsigned char *>(message), length);
+    socket_->read(reinterpret_cast<unsigned char *>(message), length);
     return boost::shared_ptr<std::string>(new std::string(message, length));
   }
 }
@@ -130,36 +130,36 @@ void Bee::Client::perform_sasl_handshake() {
   // START PLAIN
   {
     unsigned char code = 0x01;
-    this->socket_->write(&code, 1);
-    this->write_frame("PLAIN");
+    socket_->write(&code, 1);
+    write_frame("PLAIN");
   }
 
   // OK PLAIN user pass
   {
     unsigned char code = 0x02;
-    this->socket_->write(&code, 1);
+    socket_->write(&code, 1);
     std::ostringstream frame("[PLAIN]\x00");
     frame << user_ << '\0' << pass_;
-    this->write_frame(frame.str());
+    write_frame(frame.str());
   }
 
-  this->socket_->flush();
+  socket_->flush();
 
   unsigned char status;
-  this->socket_->read(&status, 1);
+  socket_->read(&status, 1);
 
   switch (status) {
   case 3: // bad
   case 4: // error
-      throw std::runtime_error(*this->read_frame());
+      throw std::runtime_error(*read_frame());
 
   case 5: // complete
-      this->read_frame();  // challenge -- ignored
+      read_frame();  // challenge -- ignored
       break;
 
   case 2: // ok
     {
-      boost::shared_ptr<std::string> message(this->read_frame());
+      boost::shared_ptr<std::string> message(read_frame());
       throw std::runtime_error(std::string("ERROR: auth failed: ") + *message);
       break;
     }
@@ -175,20 +175,20 @@ void Bee::Client::open_session() {
   request.client_protocol = TProtocolVersion::HIVE_CLI_SERVICE_PROTOCOL_V3;
 
   client_->OpenSession(response, request);
-  this->session_handle_ = response.sessionHandle;
+  session_handle_ = response.sessionHandle;
 }
 
 void Bee::Client::ensure_connected() const {
-  if (!this->transport_->isOpen())
+  if (!transport_->isOpen())
     throw std::runtime_error("not connected");
 }
 
 bool Bee::Client::has_session_handle() const {
-  return !this->session_handle_.sessionId.guid.empty();
+  return !session_handle_.sessionId.guid.empty();
 }
 
 bool Bee::Client::has_operation_handle() const {
-  return !this->operation_handle_.operationId.guid.empty();
+  return !operation_handle_.operationId.guid.empty();
 }
 
 Rcpp::List Bee::Client::build_data_frame(const TTableSchema schema, const TRowSet &row_set) const {
