@@ -26,9 +26,10 @@ src/tcli_thrift:
 	rm -rf $@/gen-cpp
 
 $(RCPP_GEN_SRC): src/extension.cpp
-	echo 'library(Rcpp)' > tmp.$$.R
-	echo 'compileAttributes()' >> tmp.$$.R
-	$(R) CMD BATCH tmp.$$.R tmp.$$.Rout
-	rm -f tmp.$$.R tmp.$$.Rout
+	$(eval tmp := $(shell mktemp -d))
+	echo 'library(Rcpp)' > $(tmp)/in.R
+	echo 'compileAttributes()' >> $(tmp)/in.R
+	$(R) CMD BATCH $(tmp)/in.R $(tmp)/out
+	rm -rf $(tmp)/in.R $(tmp)/out
 
 .PHONY: package install thrift clean
