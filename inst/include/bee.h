@@ -2,6 +2,6 @@
 #define __Bee_h__
 
 #include "Bee/Client.h"
-#include "Bee_RcppExports.h"
+#include "bee_RcppExports.h"
 
 #endif // __Bee_h__
