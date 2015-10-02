@@ -15,10 +15,12 @@ Rcpp::XPtr<Bee::Client> bee_connect(
   return client;
 }
 
-void bee_disconnect(SEXP client_sexp) {
+// [[Rcpp::export]]
+Rcpp::XPtr<Bee::Client> bee_disconnect(SEXP client_sexp) {
   Rcpp::XPtr<Bee::Client> client_xptr(client_sexp);
   Bee::Client *client = client_xptr.get();
   client->disconnect();
+  return client_xptr;
 }
 
 // [[Rcpp::export]]
