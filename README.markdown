@@ -22,7 +22,7 @@ Then run:
 
     library(bee)
     bee <- bee_connect('127.0.0.1', 10000)
-    data_frame <- bee_run('select * from honey')
+    data_frame <- bee_run(bee, 'select * from honey')
 
 The host and port default to `"127.0.0.1"` and `10000` respectively.
 
