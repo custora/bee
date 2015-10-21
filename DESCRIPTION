@@ -1,7 +1,7 @@
 Package: bee
 Type: Package
 Title: Client for HiveServer 2 / Spark ThriftServer.
-Version: 1.0
+Version: 0.0.0
 Depends: dplyr (>= 0.4.1)
 Date: 2015-09-14
 Author: George Ogata
