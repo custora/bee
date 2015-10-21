@@ -1,0 +1,13 @@
+rm -rf thrift
+mkdir thrift
+thrift -r --gen cpp -o thrift TCLIService.thrift
+
+rm -rf inst/include/tcli_thrift
+mkdir -p inst/include/tcli_thrift
+cp thrift/gen-cpp/*.h inst/include/tcli_thrift/
+
+rm -rf src/tcli_thrift
+mkdir -p src/tcli_thrift
+cp thrift/gen-cpp/*.cpp src/tcli_thrift/
+
+rm -rf thrift
