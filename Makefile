@@ -10,11 +10,13 @@ THRIFT_GEN_SRC =                \
 	src/tcli_thrift/TCLIService_constants.cpp \
 	src/tcli_thrift/TCLIService_types.cpp
 
+VERSION = $(shell sed -ne 's/Version: //p' DESCRIPTION)
+
 package: $(RCPP_GEN_SRC) $(THRIFT_GEN_HEADERS) $(THRIFT_GEN_SRC)
 	$(R) CMD build .
 
 install: package
-	$(R) CMD INSTALL bee_1.0.tar.gz
+	$(R) CMD INSTALL bee_$(VERSION).tar.gz
 
 clean:
 	rm -rf $(RCPP_GEN_SRC) inst/include/tcli_thrift src/tcli_thrift
