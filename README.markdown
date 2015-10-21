@@ -16,7 +16,7 @@ You will need:
 
 Then run:
 
-    make install
+    R CMD INSTALL .
 
 ## Usage
 
@@ -67,13 +67,13 @@ LDFLAGS += -L/opt/thrift/lib
 
 ```
 sudo su
-CXXFLAGS=-I/opt/thrift/include LD_LIBRARY_PATH=/opt/thrift/lib:$LD_LIBRARY_PATH PATH=/opt/thrift/bin:$PATH make clean install
+LD_LIBRARY_PATH=/opt/thrift/lib:$LD_LIBRARY_PATH PATH=/opt/thrift/bin:$PATH make clean install
 ```
 
 * Run R (as regular user) like this:
 
 ````
-LD_LIBRARY_PATH=/opt/thrift/lib R
+LD_LIBRARY_PATH=/opt/thrift/lib:$LD_LIBRARY_PATH R
 ````
 
 ## Contributing
