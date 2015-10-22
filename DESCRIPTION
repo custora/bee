@@ -9,5 +9,5 @@ Maintainer: George Ogata <george.ogata@gmail.com>
 Description: A simple client for HiveServer 2 and Spark ThriftServer, with
     minimal dependencies.
 License: GPL (>= 2)
-Imports: Rcpp (>= 0.12.0)
+Imports: Rcpp (>= 0.11.6)
 LinkingTo: Rcpp, BH
