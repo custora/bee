@@ -14,3 +14,5 @@ mkdir -p src/tcli_thrift
 cp thrift/gen-cpp/*.cpp src/tcli_thrift/
 
 rm -rf thrift
+
+R -e 'Rcpp::compileAttributes()'
