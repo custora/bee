@@ -25,10 +25,10 @@ static Quad big_endian(int i) {
   };
 }
 
-Bee::Client::Client(const std::string &hostname, int port, const std::string &user, const std::string &pass) :
+Bee::Client::Client(const std::string &host, int port, const std::string &user, const std::string &pass) :
   user_(user),
   pass_(pass),
-  socket_(new transport::TSocket(hostname, port)),
+  socket_(new transport::TSocket(host, port)),
   transport_(new transport::TFramedTransport(socket_)),
   protocol_(new protocol::TBinaryProtocol(transport_)),
   client_(new apache::hive::service::cli::thrift::TCLIServiceClient(protocol_)),
@@ -91,7 +91,7 @@ bool Bee::Client::has_more_rows() const {
 std::string Bee::Client::inspect() {
   std::ostringstream out;
   out << "Bee::Client[" <<
-    "hostname=" << socket_->getHost() <<
+    "host=" << socket_->getHost() <<
     ", port=" << socket_->getPort() <<
     ", user=" << user_ <<
     ", pass=" << pass_ <<
